@@ -1,1 +1,10 @@
-iii
+---
+- name: Open vSwitch Playbook
+  connection: openvswitch.openvswitch
+  gather_facts: true
+  host: ovs
+  tasks:
+   - name: Bridge
+     openvswitch_bridge: 
+       bridge: br-int
+       state: present
