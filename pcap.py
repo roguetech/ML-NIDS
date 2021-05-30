@@ -30,8 +30,52 @@ sns.set(color_codes=True)
 02 04 05 a0 01 03 03 05 01 01 08 0a 1d 74 65 c5 00 00 00 00 04 02 00 00
 """
 
-num_of_packets_to_sniff = 10
-pcap = sniff(count=num_of_packets_to_sniff)
+def packet_callback(pkt):
+    pkt.show()
+
+class Decode_Packet():
+     # Determine Service name using Port Number and Protocol
+    def service_name(self, pcap):
+        if str(pcap.type) == '2054':
+            print()
+            #pcap.show()
+        elif str(pcap.type) == '2048':
+            try:
+                self.sport_num = pcap.sport
+                self.dport_num = pcap.dport
+                self.proto = pcap.proto
+                #self.table = {num:name[8:] for name,num in vars(socket).items() if name.startswith("IPPROTO")}
+                #self.proto = "'" + str(table[proto]) + "'"
+                #print(self.dport_num)
+                #print(self.sport_num)
+                print(self.proto)
+                print("-------------------------------------")
+        #for sport_num in [80,50,443]:
+            except:
+                print("Error")
+                pcap.show()
+        '''
+        if 1 <= dport_num <= 1024:
+            service = socket.getservbyport(dport_num, 'tcp')
+            return service
+        elif 1 <= sport_num <= 1024:
+            service = socket.getservbyport(sport_num, 'tcp')
+            return service
+        else:
+            print("unknown number")
+        '''
+    def __init__(self):
+        #protocol = pcap.type
+        #print(protocol)
+        #self.service_name = self.service_name(pcap)
+        self.flag = ''
+
+
+
+#pcap = sniff(count=num_of_packets_to_sniff)
+d = Decode_Packet()
+num_of_packets_to_sniff = 5
+sniff(iface="enp0s31f6", prn=d.service_name, store=0, count=num_of_packets_to_sniff)
 
 # rdpcap returns packet list
 ## packetlist object can be enumerated 
@@ -45,13 +89,26 @@ pcap = sniff(count=num_of_packets_to_sniff)
 ## When capturing we capture layer 2 frames and beyond
 
 # Retrieving a single item from packet list
+'''
 ethernet_frame = pcap[1]
 ip_packet = ethernet_frame.payload
 segment = ip_packet.payload
 data = segment.payload # Retrieve payload that comes after layer 4
-
+'''
 #for i in len(pcap):
+'''
+print('##### Ethernet Frame #####\n')
+print(ethernet_frame.summary())
 
+print('\n##### IP Packet #####\n')
+print(ip_packet.show())
+
+print('\n##### Segment #####\n')
+print(segment.summary())
+
+print('\n##### Data #####\n')
+print(data.summary())
+'''
 
 # Observe that we just popped off previous layer header
 #print(ethernet_frame.summary())
@@ -64,25 +121,14 @@ data = segment.payload # Retrieve payload that comes after layer 4
 ## to ask the data more meaningful questions ie) type of layer 4 segment is defined in layer 3 packet
 #ethernet_frame.show()
 
-# Determine Service name using Port Number and Protocol
-def service_name(sport_num, dport_num, proto):
-    table = {num:name[8:] for name,num in vars(socket).items() if name.startswith("IPPROTO")}
-    proto = "'" + str(table[proto]) + "'"
-    print(dport_num)
-    print(proto)
-    #for sport_num in [80,50,443]:
-    if 1 <= dport_num <= 1024:
-        service = socket.getservbyport(dport_num, 'tcp')
-        return service
-    elif 1 <= sport_num <= 1024:
-        service = socket.getservbyport(sport_num, 'tcp')
-        return service
-    else:
-        print("unknown number")
 
+
+#print(type(pcap))
 #print(pcap[50].dport)
 #print(pcap[50].proto)
-#for i in len(pcap):
-i = 5
-service = service_name(pcap[i].sport, pcap[i].dport, pcap[i].proto)
-print(service)
+'''
+for i in len(pcap):
+    #i = 5
+    service = service_name(pcap[i].sport, pcap[i].dport, pcap[i].proto)
+    print(service)
+'''
