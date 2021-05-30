@@ -1,5 +1,4 @@
 from scapy.all import * # Packet manipulation
-import socket
 import pandas as pd # Pandas - Create and Manipulate DataFrames
 import numpy as np # Math Stuff (don't worry only used for one line :] )
 import binascii # Binary to Ascii 
@@ -34,48 +33,58 @@ def packet_callback(pkt):
     pkt.show()
 
 class Decode_Packet():
+    import socket
      # Determine Service name using Port Number and Protocol
     def service_name(self, pcap):
         if str(pcap.type) == '2054':
-            print()
+            return "ARP"
             #pcap.show()
         elif str(pcap.type) == '2048':
             try:
-                self.sport_num = pcap.sport
-                self.dport_num = pcap.dport
-                self.proto = pcap.proto
-                #self.table = {num:name[8:] for name,num in vars(socket).items() if name.startswith("IPPROTO")}
-                #self.proto = "'" + str(table[proto]) + "'"
-                #print(self.dport_num)
-                #print(self.sport_num)
-                print(self.proto)
+                if 1 <= int(pcap.dport) <= 1024:
+                    service = socket.getservbyport(pcap.dport, 'tcp')
+                    return service
+                elif 1 <= int(pcap.sport) <= 1024:
+                    service = socket.getservbyport(pcap.sport, 'tcp')
+                    return service
+                else:
+                    print(pcap.sport)
+                    print(pcap.dport)
                 print("-------------------------------------")
-        #for sport_num in [80,50,443]:
             except:
                 print("Error")
-                pcap.show()
-        '''
-        if 1 <= dport_num <= 1024:
-            service = socket.getservbyport(dport_num, 'tcp')
-            return service
-        elif 1 <= sport_num <= 1024:
-            service = socket.getservbyport(sport_num, 'tcp')
-            return service
-        else:
-            print("unknown number")
-        '''
-    def __init__(self):
-        #protocol = pcap.type
-        #print(protocol)
-        #self.service_name = self.service_name(pcap)
+                #pcap.show()
+
+    def flag(self, pcap):
+        FIN = 0x01
+        SYN = 0x02
+        RST = 0x04
+        PSH = 0x08
+        ACK = 0x10
+        URG = 0x20
+        ECE = 0x40
+        CWR = 0x80
+
+        if pcap[TCP]:
+            print(pcap[TCP].flags)
+
+    def __init__(self, pcap):
+        self.protocol = pcap.type
+        print("Protocol is: " + str(self.protocol))
+        self.service_name = self.service_name(pcap)
+        print(self.service_name)
+        if str(pcap.type) == '2048':
+            self.flag(pcap)
+        #F = pcap[IP].flags
+        #print(F)
         self.flag = ''
+        
 
 
 
-#pcap = sniff(count=num_of_packets_to_sniff)
-d = Decode_Packet()
+#pcap = sniff(count=num_of_packets_to_sniff) 
 num_of_packets_to_sniff = 5
-sniff(iface="enp0s31f6", prn=d.service_name, store=0, count=num_of_packets_to_sniff)
+sniff(iface="wlp2s0", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
 
 # rdpcap returns packet list
 ## packetlist object can be enumerated 
