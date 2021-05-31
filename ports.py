@@ -12,5 +12,7 @@ else:
 ports = pd.read_csv('ports.csv')
 #print(ports.head())
 
-service = ports.loc[ports['Port Number'] == '53', 'Service Name']
+service = ports.loc[ports['Port Number'] == '99999', 'Service Name']
+if service.empty:
+    service = ports.loc[ports['Port Number'] == '22', 'Service Name']
 print(service)

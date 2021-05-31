@@ -3,6 +3,8 @@ import pandas as pd # Pandas - Create and Manipulate DataFrames
 import numpy as np # Math Stuff (don't worry only used for one line :] )
 import binascii # Binary to Ascii 
 import seaborn as sns
+import requests
+import os
 sns.set(color_codes=True)
 #%matplotlib inline
 
@@ -40,6 +42,22 @@ class Decode_Packet():
             return "ARP"
             #pcap.show()
         elif str(pcap.type) == '2048':
+            if os.path.exists('ports.csv'):
+                pass
+            else:
+                url = 'https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.csv'
+                r = requests.get(url)
+                open('ports.csv', 'wb').write(r.content)
+
+            ports = pd.read_csv('ports.csv')
+
+            service = ports.loc[ports['Port Number'] == str(pcap.dport), 'Service Name']
+            if service.empty:
+                service = ports.loc[ports['Port Number'] == str(pcap.sport), 'Service Name']
+            print("Service is\n")
+            print(service.head(1))
+            return service
+            '''
             try:
                 if 1 <= int(pcap.dport) <= 1024:
                     service = socket.getservbyport(pcap.dport, 'tcp')
@@ -54,6 +72,7 @@ class Decode_Packet():
             except:
                 print("Error")
                 #pcap.show()
+            '''
 
     def flag(self, pcap):
         FIN = 0x01
@@ -72,9 +91,9 @@ class Decode_Packet():
         self.protocol = pcap.type
         print("Protocol is: " + str(self.protocol))
         self.service_name = self.service_name(pcap)
-        print(self.service_name)
-        if str(pcap.type) == '2048':
-            self.flag(pcap)
+        #print(self.service_name)
+        #if str(pcap.type) == '2048':
+        #    self.flag(pcap)
         #F = pcap[IP].flags
         #print(F)
         self.flag = ''
