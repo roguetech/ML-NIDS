@@ -54,8 +54,10 @@ class Decode_Packet():
             service = ports.loc[ports['Port Number'] == str(pcap.dport), 'Service Name']
             if service.empty:
                 service = ports.loc[ports['Port Number'] == str(pcap.sport), 'Service Name']
-            print("Service is\n")
-            print(service.head(1))
+            #print("Service is\n")
+            service = service.head(1)
+            service = service.to_string(index=False,header=False)
+            #print(service)
             return service
             '''
             try:
@@ -84,25 +86,55 @@ class Decode_Packet():
         ECE = 0x40
         CWR = 0x80
 
+        #flag = pcap['TCP'].flags
+
         if pcap[TCP]:
-            print(pcap[TCP].flags)
+            #pcap.show()
+            flag = str(pcap[TCP].flags)
+
+        else:
+            print("No flag")
 
     def __init__(self, pcap):
-        self.protocol = pcap.type
-        print("Protocol is: " + str(self.protocol))
-        self.service_name = self.service_name(pcap)
+        decoded_packet = []
+
+        if str(pcap.type) == '2054':
+            print("ARP")
+
+        elif str(pcap.type) == '2048':
+            # Decode Protocol Type
+            self.protocol = pcap.type
+            print("Protocol is: " + str(self.protocol))
+        
+        # Decode the Service Name of the Packet
+        #service_name = self.service_name(pcap)
+        #decoded_packet.insert(3, service_name)
+
+        # Decode Flag
+            if pcap['TCP']:
+                flag = self.flag(pcap)
+                decoded_packet.insert(4, flag)
+                print(len(pcap))
+                #print(len(pcap[TCP].payload))
+            else:
+                print("No flag")
+
+            print("------------------------")
+            print(decoded_packet)
+            print("------------------------")
+
+        else:
+            print(pcap.type)
+            pcap.show()
         #print(self.service_name)
         #if str(pcap.type) == '2048':
         #    self.flag(pcap)
         #F = pcap[IP].flags
         #print(F)
-        self.flag = ''
-        
-
-
+            #self.flag = ''
 
 #pcap = sniff(count=num_of_packets_to_sniff) 
-num_of_packets_to_sniff = 5
+num_of_packets_to_sniff = 1
 sniff(iface="wlp2s0", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
 
 # rdpcap returns packet list
