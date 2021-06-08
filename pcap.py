@@ -31,6 +31,17 @@ sns.set(color_codes=True)
 02 04 05 a0 01 03 03 05 01 01 08 0a 1d 74 65 c5 00 00 00 00 04 02 00 00
 """
 
+'''
+0,tcp,private,REJ,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0.00,0.00,1.00,1.00,0.50,1.00,0.00,255,1,0.00,0.31,0.28,0.00,0.00,0.00,0.29,1.00,portsweep,20
+'''
+'''
+user_hot_list = ['root', 'admin', 'user', test, ubuntu, ubnt, support, oracle, pi, Guest, postgres, ftpuser, usuario, nagios, 1234,
+ftp, operator, git, hadoop, ts3, teamspeak, mysql, tomcat, service, butter, ts, bot, deploy, monitor, administrator, bin, default,
+adm, vagrant, uucp, www, jenkins, apache, sshd, PlcmSplp, cisco, sinusbot, user1, backup, Management, steam, mother, dev, zabbix,
+manager, teamspeak3, nobody, csgoserver, test2, demo, 0, a, minecraft, alex, postfix, glassfish, jboss, master, ghost, vnc, info,
+111111, debian, centos, testuser, system, www-data, test1, upload, picmspip, weblogic, redhat, developer, public, student, webmaster,
+osmc, c, server, supervisor, 22, hdfs, linux, postmaster, csserver, prueba, matt, vyayya, hduser, nexus, ethos, Admin, mc, telnet]
+'''
 def packet_callback(pkt):
     pkt.show()
 
@@ -59,22 +70,6 @@ class Decode_Packet():
             service = service.to_string(index=False,header=False)
             #print(service)
             return service
-            '''
-            try:
-                if 1 <= int(pcap.dport) <= 1024:
-                    service = socket.getservbyport(pcap.dport, 'tcp')
-                    return service
-                elif 1 <= int(pcap.sport) <= 1024:
-                    service = socket.getservbyport(pcap.sport, 'tcp')
-                    return service
-                else:
-                    print(pcap.sport)
-                    print(pcap.dport)
-                print("-------------------------------------")
-            except:
-                print("Error")
-                #pcap.show()
-            '''
 
     def flag(self, pcap):
         FIN = 0x01
@@ -88,54 +83,113 @@ class Decode_Packet():
 
         #flag = pcap['TCP'].flags
 
-        if pcap[TCP]:
+        if str(pcap[IP].proto) == '6':
             #pcap.show()
             flag = str(pcap[TCP].flags)
+            return flag
 
         else:
             print("No flag")
 
+    def land(self, pcap):
+        src_ip = pcap[IP].src
+        dst_ip = pcap[IP].dst
+        if str(pcap[IP].proto) == '6':
+            src_port = pcap[TCP].sport
+            dst_port = pcap[TCP].dport
+        elif str(pcap[IP].proto) == '17':
+            src_port = pcap[UDP].sport
+            dst_port = pcap[UDP].dport
+        
+        if src_ip == dst_ip:
+            if src_port == dst_port:
+                return True
+            else:
+                return False
+
+    def is_host_login(self, pcap):
+        if pcap.haslayer(TCP) and pcap.haslayer(Raw):
+            if pcap[TCP].dport == 21 or pcap[TCP].sport == 21:
+                ftp_data = pcap[Raw].load
+                if 'USER ' in ftp_data:
+                    username = ftp_data.split('USER ')[1].strip()
+                    print(username)
+            else:
+                pass
+        else:
+            pass
+
     def __init__(self, pcap):
         decoded_packet = []
 
-        if str(pcap.type) == '2054':
-            print("ARP")
-
-        elif str(pcap.type) == '2048':
-            # Decode Protocol Type
-            self.protocol = pcap.type
-            print("Protocol is: " + str(self.protocol))
-        
-        # Decode the Service Name of the Packet
-        #service_name = self.service_name(pcap)
-        #decoded_packet.insert(3, service_name)
-
-        # Decode Flag
-            if pcap['TCP']:
-                flag = self.flag(pcap)
-                decoded_packet.insert(4, flag)
-                print(len(pcap))
-                #print(len(pcap[TCP].payload))
-            else:
-                print("No flag")
-
-            print("------------------------")
-            print(decoded_packet)
-            print("------------------------")
-
+        if not (pcap.type):
+            print("No Protocol")
         else:
-            print(pcap.type)
+            if str(pcap.type) == '2054':
+                print("ARP")
+
+            elif str(pcap.type) == '2048':
+                # Decode Protocol Type
+                print("protocol")
+                self.protocol = pcap.type
+                print("Protocol is: " + str(self.protocol))
+                is_host_login = self.is_host_login(pcap)
+            else:
+                print("in else")
+                pass
+            '''
+            # Decode the Service Name of the Packet
+                print("service")
+                service_name = self.service_name(pcap)
+                decoded_packet.insert(3, service_name)
+
+            # Decode Flag
+                print("flag")
+                pcap.show()
+                print(str(pcap[IP].proto))
+                if str(pcap[IP].proto) == '6':
+                    flag = self.flag(pcap)
+                    decoded_packet.insert(4, flag)
+                    print(len(pcap))
+                elif str(pcap[IP].proto) == '17':
+                    print("udp")
+                else:
+                    print("No flag")
+                    #pcap.show()
+                    #print(len(pcap[TCP].payload))
+                
+            # Is land True or False
+                if self.land(pcap):
+                    decoded_packet.insert(7, 1)
+                else:
+                    decoded_packet.insert(7, 0)
+            '''
+               # is_host_login = self.is_host_login(pcap)
+            '''
+                print("------------------------")
+                print(decoded_packet)
+                print("------------------------")
+            '''
+            #else:
+            #    print("in else")
+
+                
+
+def ftp_test(pcap):
+    if pcap.haslayer(TCP) and pcap.haslayer(Raw):
+        if pcap[TCP].dport == 21 or pcap[TCP].sport == 21:
             pcap.show()
-        #print(self.service_name)
-        #if str(pcap.type) == '2048':
-        #    self.flag(pcap)
-        #F = pcap[IP].flags
-        #print(F)
-            #self.flag = ''
+        else:
+            pass
+    else:
+        pass
 
 #pcap = sniff(count=num_of_packets_to_sniff) 
-num_of_packets_to_sniff = 1
-sniff(iface="wlp2s0", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
+num_of_packets_to_sniff = 5
+#sniff(iface="enp0s31f6", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
+sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
+#sniff(iface="wlp2s0", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
+#sniff(iface="lo", prn=ftp_test, store=0)
 
 # rdpcap returns packet list
 ## packetlist object can be enumerated 
