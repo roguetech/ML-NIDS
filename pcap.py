@@ -42,6 +42,8 @@ user_hot_list = ['root', 'admin', 'user', 'test', 'ubuntu', 'ubnt', 'support', '
 '111111', 'debian', 'centos', 'testuser', 'system', 'www-data', 'test1', 'upload', 'picmspip', 'weblogic', 'redhat', 'developer', 'public', 'student', 'webmaster',
 'osmc', 'c', 'server', 'supervisor', '22', 'hdfs', 'linux', 'postmaster', 'csserver', 'prueba', 'matt', 'vyayya', 'hduser', 'nexus', 'ethos', 'Admin', 'mc', 'telnet']
 
+host_indicators = ['mkdir', 'cd', 'vi']
+
 def packet_callback(pkt):
     pkt.show()
 
@@ -139,6 +141,19 @@ class Decode_Packet():
         else:
             return 0
 
+    def is_hot_indicator(self, pcap):
+        if pcap.haslayer(TCP) and pcap.haslayer(Raw):
+            if pcap[TCP].dport == 23 or pcap[TCP].sport == 23:
+                telnet_data = pcap[Raw].load
+                if str(telnet_data).lstrip("b'").split()[0] in host_indicators:
+                    return 1
+                else:
+                    return 0   
+            else:
+                return 0
+        else:
+            return 0
+
     def __init__(self, pcap):
         decoded_packet = []
         if str(pcap.name) == 'Ethernet':
@@ -171,7 +186,9 @@ class Decode_Packet():
                             flag = self.flag(pcap)
                             decoded_packet.insert(4, flag)
                             # 9 Urgent Flag
-
+                            if flag == '32':
+                                decoded_packet.insert(9, '1')
+                                # **** TO DO **** count number of urg in a connection
                             
                         elif str(pcap[IP].proto) == '17':
                             pass
@@ -188,8 +205,11 @@ class Decode_Packet():
                         else:
                             decoded_packet.insert(7, 0)
 
-                        # 9 Urgent Flag
+                        # 8 Wrong Fragment
 
+                        # 10 hot indicators
+                        is_host_indicator = self.is_hot_indicator(pcap)
+                        decoded_packet.insert(10, is_host_indicator)
 
                         # 21 Hot Logins
                         is_host_login = self.is_host_login(pcap)
@@ -231,7 +251,8 @@ def ftp_test(pcap):
 #pcap = sniff(count=num_of_packets_to_sniff) 
 num_of_packets_to_sniff = 5
 #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
-sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
+#sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
+sniff(filter='tcp port 23', iface="enp0s31f6", prn=Decode_Packet, store=0)
 #sniff(iface="wlp2s0", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
 #sniff(iface="lo", prn=ftp_test, store=0)
 #sniff(iface = "enp0s31f6",prn=lambda x:x.summary())
