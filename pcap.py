@@ -145,23 +145,10 @@ class Decode_Packet():
         if pcap.haslayer(TCP) and pcap.haslayer(Raw):
             if pcap[TCP].dport == 23 or pcap[TCP].sport == 23:
                 telnet_data = pcap[Raw].load
-                host_indicators_b = []
-                for item in host_indicators:
-                    host_indicators_b.append(bytes(item, 'utf-8'))
-                #telnet_list = telnet_data.lstrip("b'").split()
-                if any(item in telnet_data.lstrip("b'").split() for item in host_indicators_b):
-                    #print(telnet_list)
+                if any(item in str(telnet_data).lstrip("b'").split() for item in host_indicators):
                     return 1
-                '''
-                for hi in host_indicators:
-                    print(hi)
-                    if any(hi in value for value in str(telnet_data).lstrip("b'")):
-                        print("inside hot indicators")
-                        print(str(telnet_data).lstrip("b'"))
-                        return 1
-                    #else:
-                    #    return 0
-                '''   
+                else:
+                    return 0   
             else:
                 return 0
         else:
