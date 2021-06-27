@@ -145,10 +145,23 @@ class Decode_Packet():
         if pcap.haslayer(TCP) and pcap.haslayer(Raw):
             if pcap[TCP].dport == 23 or pcap[TCP].sport == 23:
                 telnet_data = pcap[Raw].load
-                if str(telnet_data).lstrip("b'").split()[0] in host_indicators:
+                host_indicators_b = []
+                for item in host_indicators:
+                    host_indicators_b.append(bytes(item, 'utf-8'))
+                #telnet_list = telnet_data.lstrip("b'").split()
+                if any(item in telnet_data.lstrip("b'").split() for item in host_indicators_b):
+                    #print(telnet_list)
                     return 1
-                else:
-                    return 0   
+                '''
+                for hi in host_indicators:
+                    print(hi)
+                    if any(hi in value for value in str(telnet_data).lstrip("b'")):
+                        print("inside hot indicators")
+                        print(str(telnet_data).lstrip("b'"))
+                        return 1
+                    #else:
+                    #    return 0
+                '''   
             else:
                 return 0
         else:
@@ -158,7 +171,10 @@ class Decode_Packet():
         if pcap.haslayer(TCP) and pcap.haslayer(Raw):
             if pcap[TCP].dport == 23 or pcap[TCP].sport == 23:
                 telnet_data = pcap[Raw].load
-                if str(telnet_data).lstrip("b'").split()[0] == 'su root':
+                if "su root" in str(telnet_data).lstrip("b'"):
+                    print("inside su root")
+                    print(str(telnet_data).lstrip("b'"))
+                #if str(telnet_data).lstrip("b'").split()[0] == 'su root':
                     return 1
                 else:
                     return 0   
@@ -269,7 +285,7 @@ def ftp_test(pcap):
 num_of_packets_to_sniff = 5
 #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
 #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
-sniff(filter='tcp port 23', iface="enp0s31f6", prn=Decode_Packet, store=0)
+sniff(filter='tcp port 23', iface="wlp2s0", prn=Decode_Packet, store=0)
 #sniff(iface="wlp2s0", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
 #sniff(iface="lo", prn=ftp_test, store=0)
 #sniff(iface = "enp0s31f6",prn=lambda x:x.summary())
