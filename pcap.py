@@ -154,6 +154,19 @@ class Decode_Packet():
         else:
             return 0
 
+    def is_su_root(self, pcap):
+        if pcap.haslayer(TCP) and pcap.haslayer(Raw):
+            if pcap[TCP].dport == 23 or pcap[TCP].sport == 23:
+                telnet_data = pcap[Raw].load
+                if str(telnet_data).lstrip("b'").split()[0] == 'su root':
+                    return 1
+                else:
+                    return 0   
+            else:
+                return 0
+        else:
+            return 0
+
     def __init__(self, pcap):
         decoded_packet = []
         if str(pcap.name) == 'Ethernet':
@@ -210,6 +223,10 @@ class Decode_Packet():
                         # 10 hot indicators
                         is_host_indicator = self.is_hot_indicator(pcap)
                         decoded_packet.insert(10, is_host_indicator)
+
+                        # 16 Su attempted
+                        is_su_root = self.is_su_root(pcap)
+                        decoded_packet.insert(15, is_su_root)
 
                         # 21 Hot Logins
                         is_host_login = self.is_host_login(pcap)
