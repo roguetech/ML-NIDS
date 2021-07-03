@@ -5,6 +5,9 @@ import binascii # Binary to Ascii
 import seaborn as sns
 import requests
 import os
+import threading
+import time
+import logging
 sns.set(color_codes=True)
 #%matplotlib inline
 
@@ -46,6 +49,15 @@ host_indicators = ['mkdir', 'cd', 'vi']
 
 def packet_callback(pkt):
     pkt.show()
+
+def time_keeping(name):
+    logging.info("Thread starting %s", name)
+    time.sleep(2)
+    print("inside after")
+    logging.info("Thread stopped %s", name)
+
+def packet_capture():
+    sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
 
 class Decode_Packet():
     import socket
@@ -161,7 +173,6 @@ class Decode_Packet():
                 if "su root" in str(telnet_data).lstrip("b'"):
                     print("inside su root")
                     print(str(telnet_data).lstrip("b'"))
-                #if str(telnet_data).lstrip("b'").split()[0] == 'su root':
                     return 1
                 else:
                     return 0   
@@ -227,7 +238,10 @@ class Decode_Packet():
                         is_host_indicator = self.is_hot_indicator(pcap)
                         decoded_packet.insert(10, is_host_indicator)
 
-                        # 16 Su attempted
+                        # 11 num of failed logins
+
+
+                        # 15 Su attempted
                         is_su_root = self.is_su_root(pcap)
                         decoded_packet.insert(15, is_su_root)
 
@@ -268,11 +282,22 @@ def ftp_test(pcap):
     else:
         pass
 
+if __name__ == '__main__':
+
+# thread
+
+    y = threading.Thread(target=packet_capture)
+    y.start()
+
+    logging.info("starting thread")
+    x = threading.Thread(target=time_keeping, args=(1,))
+    x.start()
+
 #pcap = sniff(count=num_of_packets_to_sniff) 
-num_of_packets_to_sniff = 5
+#    num_of_packets_to_sniff = 5
 #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
 #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
-sniff(filter='tcp port 23', iface="wlp2s0", prn=Decode_Packet, store=0)
+#    sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
 #sniff(iface="wlp2s0", prn=Decode_Packet, store=0, count=num_of_packets_to_sniff)
 #sniff(iface="lo", prn=ftp_test, store=0)
 #sniff(iface = "enp0s31f6",prn=lambda x:x.summary())
