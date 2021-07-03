@@ -8,6 +8,7 @@ import os
 import threading
 import time
 import logging
+from datetime import datetime
 sns.set(color_codes=True)
 #%matplotlib inline
 
@@ -54,21 +55,40 @@ def packet_callback(pkt):
 
 def time_keeping(name):
     logging.info("Thread starting %s", name)
+    current_time = int(datetime.now().timestamp())
+    removal_time = current_time - 2
+    for i in packets:
+        if i[6] < removal_time:
+            packets.remove(i)
+    print(packets)
     time.sleep(2)
     print("inside after")
     logging.info("Thread stopped %s", name)
 
 def packet_capture():
-    sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
+    #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
+    sniff(filter="port 80", iface="wlp2s0", prn=Decode_Packet, store=0)
+
 
 class Decode_Packet():
     import socket
      # Determine Service name using Port Number and Protocol
 
     def add_packet_to_list(self, src_ip, dst_ip, src_port, dst_port, payload_size):
-        packet = [src_ip, dst_ip, src_port, dst_port, payload_size]
-        packets.append(packet)
-        print(packets)
+        time_added = int(datetime.now().timestamp())
+        if packets:
+            for i in packets:
+                if i[0] == src_ip and i[1] == dst_ip and i[2] == src_port and i[3] == dst_port:
+                    print("same source")
+                elif i[0] == dst_ip and i[1] == src_ip and i[2] == dst_port and i[4] == src_port:
+                    print("same dst")
+                else:
+                    packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added]
+                    packets.append(packet)
+                    #print(packets)
+        else:
+           packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added]
+           packets.append(packet) 
 
     def service_name(self, pcap):
         if str(pcap.type) == '2054':
@@ -207,7 +227,7 @@ class Decode_Packet():
                         #print("Protocol is: " + str(self.protocol))
                         if str(pcap[IP].proto) == '6':
                             decoded_packet.insert(2, 'TCP')
-                            self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport), str(len(pcap.payload)))
+                            self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport), str(pcap.len))
                         elif str(pcap[IP].proto) == '17':
                             decoded_packet.insert(2, 'UDP')
                             #self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport))
