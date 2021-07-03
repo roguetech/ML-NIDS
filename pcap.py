@@ -47,6 +47,8 @@ user_hot_list = ['root', 'admin', 'user', 'test', 'ubuntu', 'ubnt', 'support', '
 
 host_indicators = ['mkdir', 'cd', 'vi']
 
+packets = []
+
 def packet_callback(pkt):
     pkt.show()
 
@@ -62,6 +64,12 @@ def packet_capture():
 class Decode_Packet():
     import socket
      # Determine Service name using Port Number and Protocol
+
+    def add_packet_to_list(self, src_ip, dst_ip, src_port, dst_port, payload_size):
+        packet = [src_ip, dst_ip, src_port, dst_port, payload_size]
+        packets.append(packet)
+        print(packets)
+
     def service_name(self, pcap):
         if str(pcap.type) == '2054':
             return "ARP"
@@ -193,13 +201,16 @@ class Decode_Packet():
                         print("ARP")
 
                     elif str(pcap.type) == '2048':
+
                         # Decode Protocol Type
                         self.protocol = pcap.type
                         #print("Protocol is: " + str(self.protocol))
                         if str(pcap[IP].proto) == '6':
                             decoded_packet.insert(2, 'TCP')
+                            self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport), str(len(pcap.payload)))
                         elif str(pcap[IP].proto) == '17':
                             decoded_packet.insert(2, 'UDP')
+                            #self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport))
                         elif str(pcap[IP].proto) == '1':
                             decoded_packet.insert(2, 'ICMP')
 
