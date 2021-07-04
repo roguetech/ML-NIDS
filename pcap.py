@@ -49,25 +49,29 @@ user_hot_list = ['root', 'admin', 'user', 'test', 'ubuntu', 'ubnt', 'support', '
 host_indicators = ['mkdir', 'cd', 'vi']
 
 packets = []
+ip_packets = []
 
 def packet_callback(pkt):
     pkt.show()
 
 def time_keeping(name):
     logging.info("Thread starting %s", name)
-    current_time = int(datetime.now().timestamp())
-    removal_time = current_time - 2
-    for i in packets:
-        if i[6] < removal_time:
-            packets.remove(i)
-    print(packets)
-    time.sleep(2)
-    print("inside after")
-    logging.info("Thread stopped %s", name)
+    while True:
+        current_time = int(datetime.now().timestamp())
+        removal_time = current_time - 2
+        if packets:
+            for i in packets:
+                if i[5] < removal_time:
+                    print("remove %s", i)
+                    packets.remove(i)
+        print(packets)
+        time.sleep(2)
+        print("inside after")
+        logging.info("Thread stopped %s", name)
 
 def packet_capture():
-    #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
-    sniff(filter="port 80", iface="wlp2s0", prn=Decode_Packet, store=0)
+    sniff(filter="ip and host 192.168.86.248 and port 123", iface="enp0s31f6", prn=Decode_Packet, store=0)
+    #sniff(filter="port 80", iface="wlp2s0", prn=Decode_Packet, store=0)
 
 
 class Decode_Packet():
@@ -75,19 +79,44 @@ class Decode_Packet():
      # Determine Service name using Port Number and Protocol
 
     def add_packet_to_list(self, src_ip, dst_ip, src_port, dst_port, payload_size):
+        packet_exists = False
+        ip_packet_exists = False
         time_added = int(datetime.now().timestamp())
+        print(packets)
+        if ip_packets:
+            for i in ip_packets:
+                if i[0] == src_ip and i[1] == dst_ip:
+                    ip_packet_exists = True
+                if not ip_packet_exists:
+                    ip_packet = [src_ip, dst_ip]
+                    ip_packets.append(ip_packet)
+        else:
+            ip_packet = [src_ip, dst_ip]
+            ip_packets.append(ip_packet)
+
         if packets:
             for i in packets:
                 if i[0] == src_ip and i[1] == dst_ip and i[2] == src_port and i[3] == dst_port:
-                    print("same source")
-                elif i[0] == dst_ip and i[1] == src_ip and i[2] == dst_port and i[4] == src_port:
-                    print("same dst")
-                else:
-                    packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added]
-                    packets.append(packet)
-                    #print(packets)
+                    print("same source\n")
+                    print("source %s", i)
+                    i[4] = int(i[4]) + int(payload_size)
+
+                    packet_exists = True
+                #elif i[0] == dst_ip and i[1] == src_ip and i[2] == dst_port and i[3] == src_port:
+                #    print("same dst")
+                #    print("dst: %s", i)
+                #    print(dst_ip)
+                #else:
+            if not packet_exists:    
+                print("inside else")
+                packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added]
+                print("adding %s", packet)
+                packets.append(packet)
+                #print(packets)
         else:
+           print("inside outside else") 
            packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added]
+           print("adding %s", packet)
            packets.append(packet) 
 
     def service_name(self, pcap):
@@ -256,6 +285,14 @@ class Decode_Packet():
                             print("No flag")
                             #pcap.show()
                             #print(len(pcap[TCP].payload))
+
+                        # 5 Src Bytes
+                        for i in packets:
+                            if i[0] == str(pcap[IP].src) and i[1] == str(pcap[IP].dst) and i[2] == str(pcap.sport) and i[3] == str(pcap.dport):
+                                decoded_packet.insert(5, i[4])
+                        # 6 6 Dst Bytes
+                            if i[0] == str(pcap[IP].dst) and i[1] == str(pcap[IP].src) and i[2] == str(pcap.dport) and i[3] == str(pcap.sport):
+                                decoded_packet.insert(6, i[4])
                 
                         # 7 Is land True or False
                         if self.land(pcap):
@@ -283,6 +320,9 @@ class Decode_Packet():
                         # 22 Guest Logins
                         is_guest_login = self.is_guest_login(pcap)
                         decoded_packet.insert(22, is_guest_login)
+
+                        # Dst Count
+                        
 
                     else:
                         print("in else")
@@ -322,7 +362,7 @@ if __name__ == '__main__':
 
     logging.info("starting thread")
     x = threading.Thread(target=time_keeping, args=(1,))
-    x.start()
+    #x.start()
 
 #pcap = sniff(count=num_of_packets_to_sniff) 
 #    num_of_packets_to_sniff = 5
