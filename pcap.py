@@ -50,6 +50,8 @@ host_indicators = ['mkdir', 'cd', 'vi']
 
 packets = []
 ip_packets = []
+dst_count = 0
+src_count = 0
 
 def packet_callback(pkt):
     pkt.show()
@@ -70,8 +72,8 @@ def time_keeping(name):
         logging.info("Thread stopped %s", name)
 
 def packet_capture():
-    sniff(filter="ip and host 192.168.86.248 and port 123", iface="enp0s31f6", prn=Decode_Packet, store=0)
-    #sniff(filter="port 80", iface="wlp2s0", prn=Decode_Packet, store=0)
+    #sniff(filter="ip and host 192.168.86.248 and port 123", iface="enp0s31f6", prn=Decode_Packet, store=0)
+    sniff(filter="ip and host 192.168.86.248 and port 123", iface="wlp2s0", prn=Decode_Packet, store=0)
 
 
 class Decode_Packet():
@@ -85,6 +87,15 @@ class Decode_Packet():
         print(packets)
         if ip_packets:
             for i in ip_packets:
+                if i[1] == dst_ip:
+                    global dst_count
+                    dst_count =+ 1
+                    print("dst_count: %s", dst_count)
+                    print(ip_packets)
+                if i[0] == src_ip:
+                    global src_count
+                    src_count =+ 1
+                    
                 if i[0] == src_ip and i[1] == dst_ip:
                     ip_packet_exists = True
                 if not ip_packet_exists:
