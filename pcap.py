@@ -72,8 +72,8 @@ def time_keeping(name):
         logging.info("Thread stopped %s", name)
 
 def packet_capture():
-    #sniff(filter="ip and host 192.168.86.248 and port 123", iface="enp0s31f6", prn=Decode_Packet, store=0)
-    sniff(filter="ip and host 192.168.86.248 and port 123", iface="wlp2s0", prn=Decode_Packet, store=0)
+    sniff(filter="ip and host 192.168.86.248 and port 123", iface="enp0s31f6", prn=Decode_Packet, store=0)
+    #sniff(filter="ip and host 192.168.86.248 and port 123", iface="wlp2s0", prn=Decode_Packet, store=0)
 
 
 class Decode_Packet():
@@ -89,20 +89,21 @@ class Decode_Packet():
             for i in ip_packets:
                 if i[1] == dst_ip:
                     global dst_count
-                    dst_count =+ 1
+                    dst_count += 1
+                    i[2] = dst_count 
                     print("dst_count: %s", dst_count)
                     print(ip_packets)
                 if i[0] == src_ip:
                     global src_count
-                    src_count =+ 1
+                    src_count += 1
                     
                 if i[0] == src_ip and i[1] == dst_ip:
                     ip_packet_exists = True
-                if not ip_packet_exists:
-                    ip_packet = [src_ip, dst_ip]
-                    ip_packets.append(ip_packet)
+            if not ip_packet_exists:
+                ip_packet = [src_ip, dst_ip, 0, 0]
+                ip_packets.append(ip_packet)
         else:
-            ip_packet = [src_ip, dst_ip]
+            ip_packet = [src_ip, dst_ip, 0, 0]
             ip_packets.append(ip_packet)
 
         if packets:
@@ -332,8 +333,10 @@ class Decode_Packet():
                         is_guest_login = self.is_guest_login(pcap)
                         decoded_packet.insert(22, is_guest_login)
 
-                        # Dst Count
-                        
+                        # 23 Dst Count
+                        for i in ip_packets:
+                            if i[1] == str(pcap[IP].dst):
+                                decoded_packet.insert(23, i[2])
 
                     else:
                         print("in else")
