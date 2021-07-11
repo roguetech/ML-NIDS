@@ -88,6 +88,7 @@ user_hot_list = ['root', 'admin', 'user', 'test', 'ubuntu', 'ubnt', 'support', '
 
 host_indicators = ['mkdir', 'cd', 'vi']
 
+decoded_packet = []
 packets = []
 ip_packets = []
 ip_ports = []
@@ -115,7 +116,7 @@ def time_keeping(name):
         logging.info("Thread stopped %s", name)
 
 def packet_capture():
-    sniff(filter="ip and host 192.168.86.248 and port 123", iface="enp0s31f6", prn=Decode_Packet, store=0)
+    sniff(filter="ip and host 192.168.86.248 and port 1234", iface="enp0s31f6", prn=Decode_Packet, store=0)
     #sniff(filter="ip and host 192.168.86.248 and port 123", iface="wlp2s0", prn=Decode_Packet, store=0)
 
 
@@ -141,9 +142,43 @@ class Decode_Packet():
             return 'R'
 
     def decode_flag(self): 
-        return 0
+        # S0: Connection attempt seen, no reply.
+        if packet[6] > 0 and packet[7] == 0 and packet[8] == 0 and packet[9] == 0:
+            decoded_packet.insert(4, 'S0')
 
-    def add_packet_to_list(self, src_ip, dst_ip, src_port, dst_port, payload_size):
+        # S1: Connection established, not terminated.
+        if packet[6] > 0 and packet[7] > 0 and packet[8] > 0 and packet[9] == 0:
+            decoded_packet.insert(4, 'S1')
+
+        # SF: Normal establishment and termination.
+        if packet[6] > 0 and packet[7] > 0 and packet[8] > 0 and packet[9] > 0:
+            decoded_packet.insert(4, 'SF')
+
+        # REJ: Connection attempt rejected.
+        if packet[6] == 1 and packet[7] > 0 and packet[8] > 0 and packet[9] == 1:
+            decoded_packet.insert(4, 'REJ')
+
+        # S2: Connection established and close attempt by originator seen (but noreply from responder).
+
+        # S3: Connection established and close attempt by responder seen (but noreply from originator).
+
+        # RSTO: Connection established, originator aborted (sent a RST).
+
+        # RSTR: Established, responder aborted.
+
+        # RSTOS0: Originator sent a SYN followed by a RST, we never saw a SYNACK from the responder.
+
+        # RSTRH: Responder sent a SYN ACK followed by a RST, we never saw aSYN from the (purported) originator.
+
+        # SH: Originator sent a SYN followed by a FIN, we never saw a SYN ACKfrom the responder (hence the connection was “half” open).
+
+        # SHR: Responder sent a SYN ACK followed by a FIN, we never saw a SYNfrom the originator.
+
+        # OTH: No SYN seen, just midstream traffic (a “partial connection” that wasnot later closed).
+        if packet[6] == 0 and packet[7] > 0 and packet[8] > 0 and packet[9] > 1:
+            decoded_packet.insert(4, 'OTH')
+
+    def add_packet_to_list(self, src_ip, dst_ip, src_port, dst_port, payload_size, pcap):
         packet_exists = False
         ip_packet_exists = False
         ip_port_exist = False
@@ -193,7 +228,7 @@ class Decode_Packet():
             ip_port = [src_port, dst_port, 0, 0]
             ip_ports.append(ip_port)
 
-
+        s, sa, a, rst = 0, 0, 0, 0
         if packets:
             # Packet List - [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, syn, syn-ack, ack, rst]
             for i in packets:
@@ -201,18 +236,25 @@ class Decode_Packet():
                     print("same source\n")
                     print("source %s", i)
                     i[4] = int(i[4]) + int(payload_size)
-                    get_flags(pcap)
+                    flag = self.get_flags(pcap)
                     print("flag is %s", flag)
                     if flag == 'S':
+                        print("inside flag is %s", flag)
                         i[6] += 1
                     elif flag == 'SA':
+                        print("inside flag is %s", flag)
                         i[7] += 1
                     elif flag == 'A':
+                        print("inside flag is %s", flag)
                         i[8] += 1
+                        print(i)
                     elif flag == 'RST':
+                        print("inside flag is %s", flag)
                         i[9] += 1
                     else:
                         pass
+
+                    self.decode_flag()
 
                     packet_exists = True
                 #elif i[0] == dst_ip and i[1] == src_ip and i[2] == dst_port and i[3] == src_port:
@@ -222,15 +264,53 @@ class Decode_Packet():
                 #else:
             if not packet_exists:    
                 print("inside else")
-                packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, 0, 0, 0]
+                flag = self.get_flags(pcap)
+                print("flag is %s", flag)
+                if flag == 'S':
+                    print("inside flag is %s", flag)
+                    s = 1
+                elif flag == 'SA':
+                    print("inside flag is %s", flag)
+                    sa = 1
+                elif flag == 'A':
+                    print("inside flag is %s", flag)
+                    a = 1
+                elif flag == 'RST':
+                    print("inside flag is %s", flag)
+                    rst = 1
+                else:
+                    pass
+
+                self.decode_flag()
+
+                packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, s, sa, a, rst]
                 print("adding %s", packet)
                 packets.append(packet)
                 #print(packets)
         else:
-           print("inside outside else") 
-           packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, 0, 0, 0]
-           print("adding %s", packet)
-           packets.append(packet) 
+            print("inside outside else")
+            flag = self.get_flags(pcap)
+            print("flag is %s", flag)
+            if flag == 'S':
+                print("inside flag is %s", flag)
+                s = 1
+            elif flag == 'SA':
+                print("inside flag is %s", flag)
+                sa = 1
+            elif flag == 'A':
+                print("inside flag is %s", flag)
+                a = 1
+            elif flag == 'RST':
+                print("inside flag is %s", flag)
+                rst = 1
+            else:
+                pass
+
+            self.decode_flag()
+
+            packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, s, sa, a]
+            print("adding %s", packet)
+            packets.append(packet) 
 
     def service_name(self, pcap):
         if str(pcap.type) == '2054':
@@ -352,7 +432,6 @@ class Decode_Packet():
             return 0
 
     def __init__(self, pcap):
-        decoded_packet = []
         if str(pcap.name) == 'Ethernet':
             try:
                 if not (pcap.type):
@@ -369,7 +448,7 @@ class Decode_Packet():
                         #print("Protocol is: " + str(self.protocol))
                         if str(pcap[IP].proto) == '6':
                             decoded_packet.insert(2, 'TCP')
-                            self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport), str(pcap.len))
+                            self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport), str(pcap.len), pcap)
                         elif str(pcap[IP].proto) == '17':
                             decoded_packet.insert(2, 'UDP')
                             #self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport))
@@ -381,6 +460,7 @@ class Decode_Packet():
                         decoded_packet.insert(3, service_name)
 
                         # 4 Decode Flag
+                        '''
                         print(str(pcap[IP].proto))
                         if str(pcap[IP].proto) == '6':
                             flag = self.flag(pcap)
@@ -398,7 +478,7 @@ class Decode_Packet():
                             print("No flag")
                             #pcap.show()
                             #print(len(pcap[TCP].payload))
-
+                        '''
                         # 5 Src Bytes
                         for i in packets:
                             if i[0] == str(pcap[IP].src) and i[1] == str(pcap[IP].dst) and i[2] == str(pcap.sport) and i[3] == str(pcap.dport):
