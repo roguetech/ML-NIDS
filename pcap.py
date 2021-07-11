@@ -39,6 +39,46 @@ sns.set(color_codes=True)
 0,tcp,private,REJ,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0.00,0.00,1.00,1.00,0.50,1.00,0.00,255,1,0.00,0.31,0.28,0.00,0.00,0.00,0.29,1.00,portsweep,20
 '''
 
+'''
+Normal Flags
+
+FIN = 0x01
+SYN = 0x02
+RST = 0x04
+PSH = 0x08
+ACK = 0x10
+URG = 0x20
+ECE = 0x40
+CWR = 0x80
+
+Dataset Flags
+
+– S0: Connection attempt seen, no reply.
+– S1: Connection established, not terminated.
+– SF: Normal establishment and termination.
+– REJ: Connection attempt rejected.
+– S2: Connection established and close attempt by originator seen (but no
+reply from responder).
+– S3: Connection established and close attempt by responder seen (but no
+reply from originator).
+– RSTO: Connection established, originator aborted (sent a RST).
+– RSTR: Established, responder aborted.
+– RSTOS0: Originator sent a SYN followed by a RST, we never saw a SYN
+ACK from the responder.
+– RSTRH: Responder sent a SYN ACK followed by a RST, we never saw a
+SYN from the (purported) originator.
+– SH: Originator sent a SYN followed by a FIN, we never saw a SYN ACK
+from the responder (hence the connection was “half” open).
+– SHR: Responder sent a SYN ACK followed by a FIN, we never saw a SYN
+from the originator.
+– OTH: No SYN seen, just midstream traffic (a “partial connection” that was
+not later closed).
+
+reference
+J. Song, H. Takakura, Y. Okabe, Description of Kyoto University Benchmark Data, Tech. rep., National Institute of Information and Communications Technology (NICT) (2010)
+
+'''
+
 user_hot_list = ['root', 'admin', 'user', 'test', 'ubuntu', 'ubnt', 'support', 'oracle', 'pi', 'Guest', 'postgres', 'ftpuser', 'usuario', 'nagios', '1234',
 'ftp', 'operator', 'git', 'hadoop', 'ts3', 'teamspeak', 'mysql', 'tomcat', 'service', 'butter', 'ts', 'bot', 'deploy', 'monitor', 'administrator', 'bin', 'default',
 'adm', 'vagrant', 'uucp', 'www', 'jenkins', 'apache', 'sshd', 'PlcmSplp', 'cisco', 'sinusbot', 'user1', 'backup', 'Management', 'steam', 'mother', 'dev', 'zabbix',
@@ -50,8 +90,11 @@ host_indicators = ['mkdir', 'cd', 'vi']
 
 packets = []
 ip_packets = []
+ip_ports = []
 dst_count = 0
 src_count = 0
+src_port_count = 0
+dst_port_count = 0
 
 def packet_callback(pkt):
     pkt.show()
@@ -80,22 +123,45 @@ class Decode_Packet():
     import socket
      # Determine Service name using Port Number and Protocol
 
+    def get_flags(self, pcap):
+        # Get SYN Only
+        if pcap[TCP].flags.S and not (pcap[TCP].flags.A or pcap[TCP].flags.P):
+            return 'S'
+
+        # Get SYN-ACK
+        if pcap[TCP].flags.S and pcap[TCP].flags.A and not (pcap[TCP].flags.P):
+            return 'SA'
+
+        # Get ACK Only
+        if pcap[TCP].flags.A and not (pcap[TCP].flags.S or pcap[TCP].flags.P):
+            return 'A'
+
+        # Get RST
+        if pcap[TCP].flags.R and not (pcap[TCP].flags.S or pcap[TCP].flags.A):
+            return 'R'
+
+    def decode_flag(self): 
+        return 0
+
     def add_packet_to_list(self, src_ip, dst_ip, src_port, dst_port, payload_size):
         packet_exists = False
         ip_packet_exists = False
+        ip_port_exist = False
         time_added = int(datetime.now().timestamp())
         print(packets)
+        # ip_packet list - [src_ip, dst_ip, src_count, dst_count]
         if ip_packets:
             for i in ip_packets:
                 if i[1] == dst_ip:
                     global dst_count
                     dst_count += 1
-                    i[2] = dst_count 
+                    i[3] = dst_count 
                     print("dst_count: %s", dst_count)
                     print(ip_packets)
                 if i[0] == src_ip:
                     global src_count
                     src_count += 1
+                    i[2] = dst_count
                     
                 if i[0] == src_ip and i[1] == dst_ip:
                     ip_packet_exists = True
@@ -106,12 +172,47 @@ class Decode_Packet():
             ip_packet = [src_ip, dst_ip, 0, 0]
             ip_packets.append(ip_packet)
 
+        # ip_ports list - [src_port, dst_port, src_port_count, dst_port_count]
+        if ip_ports:
+            for i in ip_ports:
+                if i[0] == src_port:
+                    global src_port_count
+                    src_port_count += 1
+
+                if i[1] == dst_port:
+                    global dst_port_count
+                    dst_port_count += 1
+
+                if i[0] == src_ip and i[1] == dst_port:
+                    ip_port_exist = True
+            
+            if not ip_port_exist:
+                ip_port = [src_port, dst_port, 0, 0]
+                ip_ports.append(ip_port)
+        else:
+            ip_port = [src_port, dst_port, 0, 0]
+            ip_ports.append(ip_port)
+
+
         if packets:
+            # Packet List - [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, syn, syn-ack, ack, rst]
             for i in packets:
                 if i[0] == src_ip and i[1] == dst_ip and i[2] == src_port and i[3] == dst_port:
                     print("same source\n")
                     print("source %s", i)
                     i[4] = int(i[4]) + int(payload_size)
+                    get_flags(pcap)
+                    print("flag is %s", flag)
+                    if flag == 'S':
+                        i[6] += 1
+                    elif flag == 'SA':
+                        i[7] += 1
+                    elif flag == 'A':
+                        i[8] += 1
+                    elif flag == 'RST':
+                        i[9] += 1
+                    else:
+                        pass
 
                     packet_exists = True
                 #elif i[0] == dst_ip and i[1] == src_ip and i[2] == dst_port and i[3] == src_port:
@@ -121,13 +222,13 @@ class Decode_Packet():
                 #else:
             if not packet_exists:    
                 print("inside else")
-                packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added]
+                packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, 0, 0, 0]
                 print("adding %s", packet)
                 packets.append(packet)
                 #print(packets)
         else:
            print("inside outside else") 
-           packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added]
+           packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, 0, 0, 0]
            print("adding %s", packet)
            packets.append(packet) 
 
@@ -336,7 +437,24 @@ class Decode_Packet():
                         # 23 Dst Count
                         for i in ip_packets:
                             if i[1] == str(pcap[IP].dst):
-                                decoded_packet.insert(23, i[2])
+                                decoded_packet.insert(23, i[3])
+
+                        # 24 Dst Port Count
+                        for i in ip_ports:
+                            if i[1] == str(pcap[IP].dport):
+                                decoded_packet.insert(24, i[3])
+
+                        # 25 
+
+                        # 32 Src Count (Number of connections having the same destination host IP address)
+                        for i in ip_packets:
+                            if i[0] == str(pcap[IP].src):
+                                decoded_packet.insert(32, i[2])
+
+                        # 33 Src Port Count (Number of connections having the same port number)
+                        for i in ip_ports:
+                            if i[0] == str(pcap[IP].sport):
+                                decoded_packet.insert(33, i[2])
 
                     else:
                         print("in else")
