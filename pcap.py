@@ -1,3 +1,4 @@
+from typing import Protocol
 from scapy.all import * # Packet manipulation
 import pandas as pd # Pandas - Create and Manipulate DataFrames
 import numpy as np # Math Stuff (don't worry only used for one line :] )
@@ -9,6 +10,10 @@ import threading
 import time
 import logging
 from datetime import datetime
+import requests
+import json
+from pickle import dump, load
+import sklearn
 sns.set(color_codes=True)
 #%matplotlib inline
 
@@ -37,6 +42,33 @@ sns.set(color_codes=True)
 
 '''
 0,tcp,private,REJ,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0.00,0.00,1.00,1.00,0.50,1.00,0.00,255,1,0.00,0.31,0.28,0.00,0.00,0.00,0.29,1.00,portsweep,20
+'''
+
+'''
+Categorical Features to match
+
+['protocol_type_icmp', 'protocol_type_tcp', 'protocol_type_udp',
+       'service_IRC', 'service_X11', 'service_Z39_50', 'service_aol',
+       'service_auth', 'service_bgp', 'service_courier', 'service_csnet_ns',
+       'service_ctf', 'service_daytime', 'service_discard', 'service_domain',
+       'service_domain_u', 'service_echo', 'service_eco_i', 'service_ecr_i',
+       'service_efs', 'service_exec', 'service_finger', 'service_ftp',
+       'service_ftp_data', 'service_gopher', 'service_harvest',
+       'service_hostnames', 'service_http', 'service_http_2784',
+       'service_http_443', 'service_http_8001', 'service_imap4',
+       'service_iso_tsap', 'service_klogin', 'service_kshell', 'service_ldap',
+       'service_link', 'service_login', 'service_mtp', 'service_name',
+       'service_netbios_dgm', 'service_netbios_ns', 'service_netbios_ssn',
+       'service_netstat', 'service_nnsp', 'service_nntp', 'service_ntp_u',
+       'service_other', 'service_pm_dump', 'service_pop_2', 'service_pop_3',
+       'service_printer', 'service_private', 'service_red_i',
+       'service_remote_job', 'service_rje', 'service_shell', 'service_smtp',
+       'service_sql_net', 'service_ssh', 'service_sunrpc', 'service_supdup',
+       'service_systat', 'service_telnet', 'service_tftp_u', 'service_tim_i',
+       'service_time', 'service_urh_i', 'service_urp_i', 'service_uucp',
+       'service_uucp_path', 'service_vmnet', 'service_whois', 'flag_OTH',
+       'flag_REJ', 'flag_RSTO', 'flag_RSTOS0', 'flag_RSTR', 'flag_S0',
+       'flag_S1', 'flag_S2', 'flag_S3', 'flag_SF', 'flag_SH']
 '''
 
 '''
@@ -91,6 +123,7 @@ host_indicators = ['mkdir', 'cd', 'vi']
 packets = []
 ip_packets = []
 ip_ports = []
+num_of_list = []
 dst_count = 0
 src_count = 0
 src_port_count = 0
@@ -116,8 +149,10 @@ def time_keeping(name):
         logging.info("Thread stopped %s", name)
 
 def packet_capture():
-    sniff(filter="ip and host 192.168.86.248 and port 1234", iface="enp0s31f6", prn=Decode_Packet, store=0)
+    #sniff(filter="ip and host 192.168.86.248 and port 37", iface="enp0s31f6", prn=Decode_Packet, store=0)
     #sniff(filter="ip and host 192.168.86.248 and port 123", iface="wlp2s0", prn=Decode_Packet, store=0)
+    #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
+    sniff(filter="port 80", iface="enp0s31f6", prn=Decode_Packet, store=0)
 
 
 class Decode_Packet():
@@ -154,7 +189,7 @@ class Decode_Packet():
         elif pcap[TCP].flags.PA and not (pcap[TCP].flags.S): # or pcap[TCP].flags.A):
             return 'PA'
 
-    def decode_flag(self, packet): 
+    def decode_flag(self, packet, pcap): 
         print("inside decode")
         
         global decoded_flag
@@ -165,7 +200,7 @@ class Decode_Packet():
             decoded_flag = 'S0'
 
         # S1: Connection established, not terminated.
-        elif packet[6] > 0 and packet[7] > 0 and packet[8] > 0 and packet[9] == 0:
+        elif packet[6] >= 0 and packet[7] >= 0 and packet[8] > 0 and packet[9] == 0:
             decoded_flag = 'S1'
 
         # SF: Normal establishment and termination.
@@ -177,21 +212,38 @@ class Decode_Packet():
             decoded_flag = 'REJ'
 
         # S2: Connection established and close attempt by originator seen (but noreply from responder).
+        elif packet[0] == pcap[IP].src and packet[1] == pcap[IP].dst and packet[2] == pcap[IP].sport and pcap[IP].dport and (pcap[TCP].flags.F or pcap[TCP].flags.R):
+        #elif packet[6] > 0 and packet[7] > 0 and packet[8] > 0 and packet[9] == 0 and packet[11] == 1:
+            decoded_flag = 'S2'
 
         # S3: Connection established and close attempt by responder seen (but noreply from originator).
+        
 
         # RSTO: Connection established, originator aborted (sent a RST).
+        elif packet[6] == 1 and packet[7] == 1 and packet[8] == 1 and packet[9] == 1:
+            if packet[0] == pcap[IP].src and packet[1] == pcap[IP].dst and packet[2] == pcap[IP].sport and pcap[IP].dport and pcap[TCP].flags.R:
+                decoded_flag = 'RSTO'
 
         # RSTR: Established, responder aborted.
+        elif packet[6] == 1 and packet[7] == 1 and packet[8] == 1 and packet[9] == 1:
+            if packet[0] == pcap[IP].dst and packet[1] == pcap[IP].src and packet[2] == pcap[IP].dport and pcap[IP].sport and pcap[TCP].flags.R:
+                decoded_flag = 'RSTR'
 
         # RSTOS0: Originator sent a SYN followed by a RST, we never saw a SYNACK from the responder.
-        #elif packet[6] == 1 and packet
+        elif packet[6] == 1 and packet[7] == 0 and packet[8] == 0 and packet[9] == 1:
+            decoded_flag = 'RSTOS0'
 
-        # RSTRH: Responder sent a SYN ACK followed by a RST, we never saw aSYN from the (purported) originator.
+        # RSTRH: Responder sent a SYN ACK followed by a RST, we never saw a SYN from the (purported) originator.
+        elif packet[6] == 0 and packet[7] == 1 and packet[8] == 0 and packet[9] == 1:
+            decoded_flag = 'RSTRH'
 
-        # SH: Originator sent a SYN followed by a FIN, we never saw a SYN ACKfrom the responder (hence the connection was “half” open).
+        # SH: Originator sent a SYN followed by a FIN, we never saw a SYN ACK from the responder (hence the connection was “half” open).
+        elif packet[6] == 0 and packet[7] == 1 and packet[8] == 0 and packet[9] == 1:
+            decoded_flag = 'SH'
 
-        # SHR: Responder sent a SYN ACK followed by a FIN, we never saw a SYNfrom the originator.
+        # SHR: Responder sent a SYN ACK followed by a FIN, we never saw a SYN from the originator.
+        elif packet[6] == 0 and packet[7] == 1 and packet[8] == 0 and packet[11] == 1:
+            decoded_flag = 'SHR'
 
         # OTH: No SYN seen, just midstream traffic (a “partial connection” that wasnot later closed).
         elif packet[6] == 0 and packet[7] > 0 or packet[8] > 0 and packet[9] == 1:
@@ -209,15 +261,16 @@ class Decode_Packet():
         ip_port_exist = False
         time_added = int(datetime.now().timestamp())
         print("new packets %s", packets)
-        # ip_packet list - [src_ip, dst_ip, src_count, dst_count]
+        # ip_packet list (11)- [src_ip, dst_ip, src_count, dst_count, num_failed_logins, num_compromised, num_root_operations, num_file_creation, \
+        # num_shell_prompts, num_of_access_files, num_outbound_cmds]
         if ip_packets:
             for i in ip_packets:
                 if i[1] == dst_ip:
                     global dst_count
                     dst_count += 1
                     i[3] = dst_count 
-                    print("dst_count: %s", dst_count)
-                    print("new ip packets %s", ip_packets)
+                    #print("dst_count: %s", dst_count)
+                    #print("new ip packets %s", ip_packets)
                 if i[0] == src_ip:
                     global src_count
                     src_count += 1
@@ -226,11 +279,13 @@ class Decode_Packet():
                 if i[0] == src_ip and i[1] == dst_ip:
                     ip_packet_exists = True
             if not ip_packet_exists:
-                ip_packet = [src_ip, dst_ip, 0, 0]
+                ip_packet = [src_ip, dst_ip, 0, 0, 0, 0, 0, 0, 0, 0, 0]
                 ip_packets.append(ip_packet)
         else:
-            ip_packet = [src_ip, dst_ip, 0, 0]
+            ip_packet = [src_ip, dst_ip, 0, 0, 0, 0, 0, 0, 0, 0, 0]
             ip_packets.append(ip_packet)
+
+        print("IP Packets: ", ip_packets)
 
         # ip_ports list - [src_port, dst_port, src_port_count, dst_port_count]
         if ip_ports:
@@ -253,10 +308,10 @@ class Decode_Packet():
             ip_port = [src_port, dst_port, 0, 0]
             ip_ports.append(ip_port)
 
-        s, sa, a, rst = 0, 0, 0, 0
+        s, sa, a, rst, pa, f = 0, 0, 0, 0, 0, 0
 
         if packets:
-            # Packet List - [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, syn, syn-ack, ack, rst]
+            # Packet List - [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, syn, syn-ack, ack, rst, pa, f, fa]
             for i in packets:
                 if i[0] == src_ip and i[1] == dst_ip and i[2] == src_port and i[3] == dst_port:
                     print("same source\n")
@@ -280,10 +335,15 @@ class Decode_Packet():
                         i[9] += 1
                     elif flag == 'PA':
                         print("inside flag is", flag)
+                        i[10] += 1
+                    elif flag == 'F':
+                        print("inside flag is", flag)
+                        i[11] += 1
+
                     else:
                         pass
 
-                    self.decode_flag(i)
+                    self.decode_flag(i, pcap)
                     
                     packet_exists = True
                 #elif i[0] == dst_ip and i[1] == src_ip and i[2] == dst_port and i[3] == src_port:
@@ -312,8 +372,8 @@ class Decode_Packet():
                 else:
                     pass
 
-                packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, s, sa, a, rst]
-                self.decode_flag(packet)
+                packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, s, sa, a, rst, pa, f]
+                self.decode_flag(packet, pcap)
                 print("adding %s", packet)
                 packets.append(packet)
                 #print(packets)
@@ -339,8 +399,8 @@ class Decode_Packet():
             else:
                 pass
             
-            packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, s, sa, a, rst]
-            self.decode_flag(packet)
+            packet = [src_ip, dst_ip, src_port, dst_port, payload_size, time_added, s, sa, a, rst, pa, f]
+            self.decode_flag(packet, pcap)
             print("adding %s", packet)
             packets.append(packet)
 
@@ -463,8 +523,86 @@ class Decode_Packet():
         else:
             return 0
 
+    def failed_logins(self, pcap):
+        if pcap.haslayer(TCP) and pcap.haslayer(Raw):
+            if (pcap[TCP].dport == 23 or pcap[TCP].sport == 23) or (pcap[TCP].dport == 21 or pcap[TCP].sport == 21):
+                telnet_data = pcap[Raw].load
+                if "Login incorrect" in str(telnet_data).lstrip("b'"):
+                    print(str(telnet_data).lstrip("b'"))
+                    return 1
+                else:
+                    return 0   
+            else:
+                return 0
+        else:
+            return 0
+
+    def success_login(self, pcap):
+        if pcap.haslayer(TCP) and pcap.haslayer(Raw):
+            if (pcap[TCP].dport == 23 or pcap[TCP].sport == 23) or (pcap[TCP].dport == 21 or pcap[TCP].sport == 21):
+                telnet_data = pcap[Raw].load
+                if "Login successful" in str(telnet_data).lstrip("b'"):
+                    print(str(telnet_data).lstrip("b'"))
+                    return 1
+                else:
+                    return 0   
+            else:
+                return 0
+        else:
+            return 0
+
+    def is_access_control_file(self, pcap):
+        if pcap.haslayer(TCP) and pcap.haslayer(Raw):
+            if (pcap[TCP].dport == 23 or pcap[TCP].sport == 23) or (pcap[TCP].dport == 21 or pcap[TCP].sport == 21):
+                telnet_data = pcap[Raw].load
+                if ".acl" in str(telnet_data).lstrip("b'"):
+                    print(str(telnet_data).lstrip("b'"))
+                    return 1
+                else:
+                    return 0   
+            else:
+                return 0
+        else:
+            return 0
+
+    def predict_packet(self, decoded_packet_dataset):
+        url = 'http://127.0.0.1:5000/pred'
+
+        columns = ['duration','protocol_type_icmp','protocol_type_tcp','protocol_type_udp','service_IRC','service_X11','service_Z39_50','service_aol','service_auth', \
+            'service_bgp','service_courier','service_csnet_ns','service_ctf','service_daytime','service_discard','service_domain','service_domain_u','service_echo', \
+            'service_eco_i','service_ecr_i','service_efs','service_exec','service_finger','service_ftp','service_ftp_data','service_gopher','service_harvest','service_hostnames', \
+            'service_http','service_http_2784','service_http_443','service_http_8001','service_imap4','service_iso_tsap','service_klogin','service_kshell','service_ldap', \
+            'service_link','service_login','service_mtp','service_name','service_netbios_dgm','service_netbios_ns','service_netbios_ssn','service_netstat','service_nnsp', \
+            'service_nntp','service_ntp_u','service_other','service_pm_dump','service_pop_2','service_pop_3','service_printer','service_private','service_red_i','service_remote_job', \
+            'service_rje','service_shell','service_smtp','service_sql_net','service_ssh','service_sunrpc','service_supdup','service_systat','service_telnet','service_tftp_u', \
+            'service_tim_i','service_time','service_urh_i','service_urp_i','service_uucp','service_uucp_path','service_vmnet','service_whois','flag_OTH','flag_REJ','flag_RSTO', \
+            'flag_RSTOS0','flag_RSTR','flag_S0','flag_S1','flag_S2','flag_S3','flag_SF','flag_SH','src_bytes','dst_bytes','land','wrong_fragment','urgent','hot','num_failed_logins', \
+            'logged_in','num_compromised','root_shell','su_attempted','num_root','num_file_creations','num_shells','num_access_files','num_outbound_cmds','is_host_login', \
+            'is_guest_login','count','srv_count','serror_rate','srv_serror_rate','rerror_rate','srv_rerror_rate','same_srv_rate','diff_srv_rate','srv_diff_host_rate', \
+            'dst_host_count','dst_host_srv_count','dst_host_same_srv_rate','dst_host_diff_srv_rate','dst_host_same_src_port_rate','dst_host_srv_diff_host_rate','dst_host_serror_rate', \
+            'dst_host_srv_serror_rate','dst_host_rerror_rate','dst_host_srv_rerror_rate','difficulty_level']
+
+        print("Columns: ", len(columns))
+        print(len(decoded_packet_dataset))
+        data = pd.DataFrame([decoded_packet_dataset], columns=columns)
+        data = data.drop('difficulty_level',axis=1)
+        data = data.astype(float)
+
+        print("Data: ", data)
+        data = data.to_dict()
+
+        j_data = json.dumps(data)
+
+        headers = {'content-type': 'application/json', 'Accept-Charset': 'UTF-8'}
+        r = requests.post(url, data=j_data, headers=headers)
+
     def __init__(self, pcap):
         decoded_packet = []
+        numeric_features = [0] * 39 
+        protocol_list = [0] * 3
+        service_list = [0] * 70
+        flags_list = [0] * 11
+
         if str(pcap.name) == 'Ethernet':
             try:
                 if not (pcap.type):
@@ -479,18 +617,45 @@ class Decode_Packet():
                         # Decode Protocol Type
                         self.protocol = pcap.type
                         #print("Protocol is: " + str(self.protocol))
+                        protocol_list_heading = ["protocol_type_icmp","protocol_type_tcp","protocol_type_udp"]
+
                         if str(pcap[IP].proto) == '6':
+                            protocol_list[1] = 1
                             decoded_packet.insert(2, 'TCP')
                             print("f", pcap[TCP].flags)
                             self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport), str(pcap.len), pcap)
                         elif str(pcap[IP].proto) == '17':
+                            protocol_list[2] = 1
                             decoded_packet.insert(2, 'UDP')
                             #self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport))
                         elif str(pcap[IP].proto) == '1':
+                            protocol_list[0] = 1
                             decoded_packet.insert(2, 'ICMP')
+
+                        print("Protocol list: ", protocol_list)
 
                         # 3 Decode the Service Name of the Packet
                         service_name = self.service_name(pcap)
+                        service_list_heading = ["service_IRC", "service_X11", "service_z39-50", "service_aol", "service_auth", "service_bgp", "service_courier", "service_csnet-ns", "service_ctf",\
+                            "service_daytime","service_discard","service_domain","service_domain_u","service_echo","service_eco_i","service_ecr_i","service_efs","service_exec","service_finger", \
+                            "service_ftp","service_ftp-data","service_gopher","service_harvest","service_hostnames","service_http","service_www-dev","service_https","service_vcom-tunnel","service_imap", \
+                            "service_iso-tsap","service_klogin","service_kshell","service_ldap","service_link","service_login","service_mtp","service_name","service_netbios-dgm","service_netbios-ns", \
+                            "service_netbios-ssn","service_netstat","service_nnsp","service_nntp","service_ntp_u","service_other","service_pm-dump","service_pop2","service_pop3","service_printer", \
+                            "service_private","service_red_i","service_netrjs","service_rje","service_shell","service_smtp","service_sql-net","service_ssh","service_sunrpc","service_supdup", \
+                            "service_systat","service_telnet","service_tftp_u","service_tim_i","service_time","service_urh_i","service_urp_i","service_uucp","service_uucp-path","service_vmnet", \
+                            "service_whois"]
+
+                        service_name = "service_" + service_name
+
+                        if service_name in service_list_heading:
+                            print(service_name)
+                            service_list[service_list_heading.index(service_name)] = 1
+
+                        else:
+                            print("Not found")
+
+                        print("Service list: ", service_list)
+
                         decoded_packet.insert(3, service_name)
 
                         # 4 Decode Flag
@@ -513,63 +678,134 @@ class Decode_Packet():
                             print("No flag")
                             #pcap.show()
                             #print(len(pcap[TCP].payload))
+
+                        numeric_feature_headings = ["duration","src_bytes","dst_bytes","land","wrong_fragment","urgent","hot","num_failed_logins","logged_in","num_compromised","root_shell","su_attempted", \
+                            "num_root","num_file_creations","num_shells","num_access_files","num_outbound_cmds","is_host_login","is_guest_login","count","srv_count","serror_rate","srv_serror_rate","rerror_rate", \
+                            "srv_rerror_rate","same_srv_rate","diff_srv_rate","srv_diff_host_rate","dst_host_count","dst_host_srv_count","dst_host_same_srv_rate","dst_host_diff_srv_rate","dst_host_same_src_port_rate", \
+                            "dst_host_srv_diff_host_rate","dst_host_serror_rate","dst_host_srv_serror_rate","dst_host_rerror_rate","dst_host_srv_rerror_rate","difficulty_level"] 
                         
                         # 5 Src Bytes
                         for i in packets:
                             if i[0] == str(pcap[IP].src) and i[1] == str(pcap[IP].dst) and i[2] == str(pcap.sport) and i[3] == str(pcap.dport):
                                 decoded_packet.insert(5, i[4])
+                                numeric_features[1] = i[4]
                         # 6 6 Dst Bytes
                             if i[0] == str(pcap[IP].dst) and i[1] == str(pcap[IP].src) and i[2] == str(pcap.dport) and i[3] == str(pcap.sport):
                                 decoded_packet.insert(6, i[4])
-                
+                                numeric_features[2] = i[4]
+
                         # 7 Is land True or False
                         if self.land(pcap):
                             decoded_packet.insert(7, 1)
+                            numeric_features[3] = 1
                         else:
                             decoded_packet.insert(7, 0)
+                            numeric_features[3] = 0
 
                         # 8 Wrong Fragment
 
                         # 10 hot indicators
                         is_host_indicator = self.is_hot_indicator(pcap)
                         decoded_packet.insert(10, is_host_indicator)
+                        numeric_features[6] = is_host_indicator
 
-                        # 11 num of failed logins
+                        print("decoded packet: ", decoded_packet)
 
+                        # 11 Num of failed logins
+                        # ip_packet list (13)- [src_ip, dst_ip, src_count, dst_count, num_failed_logins, num_compromised, num_root_operations, num_file_creation, \
+                        # num_shell_prompts, num_of_access_files, num_outbound_cmds]
+                        
+                        failed_logins = self.failed_logins(pcap)
+                        if ip_packets:
+                            for i in ip_packets:
+                                if (i[0] == pcap[IP].src and i[1] == pcap[IP].dst) or (i[0] == pcap[IP].dst and i[1] == pcap[IP].src):
+                                    i[4] += 1
+                                    if len(decoded_packet) == 12:
+                                        decoded_packet[11] = i[4]
+                                    else:
+                                        decoded_packet.insert(11, i[4])
+
+                                    numeric_features[7] = i[4]
+
+                                    # 16 Num Root
+
+                                    # 17 Num File Creations
+
+                                    # 18 Num Shells
+                        
+                                    # 19 Num access files
+
+                                    # 20 Num Outbount Cmds
+
+                        # 12 Login Status
+                        success_login = self.success_login(pcap)
+                        decoded_packet.insert(12, success_login)
+                        numeric_features[8] = success_login
+
+                        # 13 Num of comprised conditions
+
+                        # 14 Root shell is obtained
 
                         # 15 Su attempted
                         is_su_root = self.is_su_root(pcap)
                         decoded_packet.insert(15, is_su_root)
+                        numeric_features[11] = is_su_root
 
                         # 21 Hot Logins
                         is_host_login = self.is_host_login(pcap)
                         decoded_packet.insert(21, is_host_login)
+                        numeric_features[17] = is_host_login
 
                         # 22 Guest Logins
                         is_guest_login = self.is_guest_login(pcap)
                         decoded_packet.insert(22, is_guest_login)
+                        numeric_features[18]= is_guest_login
 
                         # 23 Dst Count
                         for i in ip_packets:
                             if i[1] == str(pcap[IP].dst):
-                                decoded_packet.insert(23, i[3])
+                                i[3] =+ 1
+                                if len(decoded_packet) == 24:
+                                    decoded_packet[23] = i[3]
+                                else:
+                                    decoded_packet.insert(23, i[3])
+                                
+                                numeric_features[19] = i[3]
 
                         # 24 Dst Port Count
                         for i in ip_ports:
                             if i[1] == str(pcap[IP].dport):
-                                decoded_packet.insert(24, i[3])
+                                i[3] =+ 1
+                                if len(decoded_packet) == 25:
+                                    decoded_packet[24] = i[3]
+                                else:
+                                    decoded_packet.insert(24, i[3])
 
-                        # 25 
+                                numeric_features[20] = i[3]
+
+                        # 25 Serror Rate
 
                         # 32 Src Count (Number of connections having the same destination host IP address)
                         for i in ip_packets:
                             if i[0] == str(pcap[IP].src):
-                                decoded_packet.insert(32, i[2])
+                                i[2] =+ 1
+                                if len(decoded_packet) == 33:
+                                    decoded_packet[32] = i[2]
+                                else:
+                                    decoded_packet.insert(32, i[2])
+
+                                numeric_features[28] = i[2]
 
                         # 33 Src Port Count (Number of connections having the same port number)
                         for i in ip_ports:
                             if i[0] == str(pcap[IP].sport):
-                                decoded_packet.insert(33, i[2])
+                                i[2] =+ 1
+                                if len(decoded_packet) == 34:
+                                    decoded_packet[33] = i[2]
+                                else:
+                                    decoded_packet.insert(33, i[2])
+
+                                numeric_features[29] = i[2]
 
                     else:
                         print("in else")
@@ -579,6 +815,62 @@ class Decode_Packet():
                     print("------------------------")
                     print(decoded_packet)
                     print("------------------------")
+
+                    scaler = load(open('scaler.pkl', 'rb'))
+
+                    scaler.clip = False
+
+                    numeric_features = pd.DataFrame([numeric_features])
+                    numeric_features = numeric_features.astype(float)
+
+                    numeric_features = scaler.transform(numeric_features)
+
+                    print("numeric features: ",numeric_features.shape)
+
+                    numeric_features = numeric_features.tolist()
+                    print("Numeric 1: ", numeric_features)
+
+                    numeric_features[0][7] = 0.0
+
+                    #decoded_packet_dataset = protocol_list + service_list + flags_list
+
+                    #decoded_packet_dataset = pd.DataFrame([decoded_packet_dataset])
+                    # SF flag
+                    #flags_list[9] = 1
+                    # S1 flag
+                    flags_list[6] = 1
+
+                    print("flag list: ", flags_list)
+
+                    print("length: ", len(protocol_list), len(service_list), len(flags_list), len(numeric_features[0]))
+                    decoded_packet_dataset = protocol_list + service_list + flags_list
+
+                    duration = numeric_features[0][0]
+                    del numeric_features[0][0]
+                    #duration = pd.DataFrame(numeric_features['duration'])
+                    #decoded_packet_dataset = decoded_packet_dataset.join(numeric_features.drop(['duration']))
+
+                    #print("decoded_packet_dataset", decoded_packet_dataset)
+
+                    decoded_packet_dataset = decoded_packet_dataset + numeric_features[0]
+
+                    #print("duration: " + str(duration))
+                    decoded_packet_dataset = [duration] + decoded_packet_dataset
+
+                    decoded_packet_dataset[113] = 1.0
+                    decoded_packet_dataset[114] = 1.0
+
+                    decoded_packet_dataset[122] = 1.0
+
+                    # land attack
+                    decoded_packet_dataset[87] = 0.0
+
+                    print(decoded_packet_dataset)
+                    print(len(decoded_packet_dataset))
+
+                    predict_packet = self.predict_packet(decoded_packet_dataset)
+
+                    #print(numeric_features)
                     
                 #else:
                 #    print("in else")
