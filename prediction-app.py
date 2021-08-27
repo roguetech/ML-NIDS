@@ -18,7 +18,11 @@ def add_rule(target_packet):
     port_src = target_packet[2]
     port_dst = target_packet[3]
 
-    os.system("./sdn-module.py ip_src ip_dst port_src port_dst")
+    cmd = "python3 sdn-module.py " + ip_src + " " + ip_dst + " " + port_src + " " + port_dst
+
+    resp = os.system(cmd)
+
+    #print(resp)
 
 @app.route('/pred', methods=['POST'])
 
@@ -43,6 +47,7 @@ def pred():
 
     print("Loaded Json")
     data_pd = pd.json_normalize(data_json).values
+    #print("data_pd: ", data_pd)
     prediction = model.predict(data_pd)
 
     score = tf.keras.losses.mae(prediction, data_pd)
@@ -58,7 +63,7 @@ def pred():
         data_value = "normal " + str(threshold)
 
     #print(data_json)
-    #print(data_value)
+    print(data_value)
 
     return data_value
 

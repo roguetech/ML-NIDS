@@ -10,12 +10,11 @@ flow_tables = []
 
 def main(src_ip, dst_ip, src_port, dst_port):
     print("SDN Module")
-    print("Test: ", src_ip, dst_ip, src_port, dst_port)
-    #get_all_nodes()
-    #node = str(node_list[0])
-    #get_all_flows()
-    #flow = add_flow(0, "test1", node, "1.1.1.1", "2.2.2.2", "80", "11111")
-    #print("Flow Response: ", flow)
+    get_all_nodes()
+    node = str(node_list[0])
+    get_all_flows()
+    flow = add_flow(0, "test1", node, src_ip, dst_ip, src_port, dst_port)
+    print("Flow Response: ", flow)
 
 def get_all_nodes():
     node_url = controller_url + '/operational/opendaylight-inventory:nodes'
