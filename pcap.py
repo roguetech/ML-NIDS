@@ -152,7 +152,7 @@ def packet_capture():
     #sniff(filter="ip and host 192.168.86.248 and port 37", iface="enp0s31f6", prn=Decode_Packet, store=0)
     #sniff(filter="ip and host 192.168.86.248 and port 123", iface="wlp2s0", prn=Decode_Packet, store=0)
     #sniff(iface="enp0s31f6", prn=Decode_Packet, store=0)
-    sniff(filter="port 80", iface="enp0s31f6", prn=Decode_Packet, store=0)
+    sniff(filter="port 443", iface="enp0s31f6", prn=Decode_Packet, store=0)
 
 
 class Decode_Packet():
@@ -254,58 +254,62 @@ class Decode_Packet():
 
         print("print decoded flag %s", decoded_flag)
         print(packets)
+        return decoded_flag
 
-    def add_packet_to_list(self, src_ip, dst_ip, src_port, dst_port, payload_size, pcap):
+    def add_packet_to_list(self, src_ip, dst_ip, src_port, dst_port, payload_size, pcap, service):
         packet_exists = False
         ip_packet_exists = False
         ip_port_exist = False
         time_added = int(datetime.now().timestamp())
         print("new packets %s", packets)
-        # ip_packet list (11)- [src_ip, dst_ip, src_count, dst_count, num_failed_logins, num_compromised, num_root_operations, num_file_creation, \
-        # num_shell_prompts, num_of_access_files, num_outbound_cmds]
+        # ip_packet list (11)- [src_ip, dst_ip, src_count, dst_count, time_added, S0, S1, S2, S3, REJ, service]
         if ip_packets:
             for i in ip_packets:
                 if i[1] == dst_ip:
-                    global dst_count
-                    dst_count += 1
-                    i[3] = dst_count 
+                    #global dst_count
+                    #dst_count += 1
+                    #i[3] = dst_count
+                    i[3] = i[3] + 1
                     #print("dst_count: %s", dst_count)
                     #print("new ip packets %s", ip_packets)
                 if i[0] == src_ip:
-                    global src_count
-                    src_count += 1
-                    i[2] = dst_count
+                    i[2] = i[2] + 1
+                    #global src_count
+                    #src_count += 1
+                    #i[2] = dst_count
                     
                 if i[0] == src_ip and i[1] == dst_ip:
                     ip_packet_exists = True
             if not ip_packet_exists:
-                ip_packet = [src_ip, dst_ip, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                ip_packet = [src_ip, dst_ip, 1, 1, time_added, 0, 0, 0, 0, 0, service]
                 ip_packets.append(ip_packet)
         else:
-            ip_packet = [src_ip, dst_ip, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            ip_packet = [src_ip, dst_ip, 1, 1, time_added, 0, 0, 0, 0, 0, service]
             ip_packets.append(ip_packet)
 
         print("IP Packets: ", ip_packets)
 
-        # ip_ports list - [src_port, dst_port, src_port_count, dst_port_count]
+        # ip_ports list - [src_port, dst_port, src_port_count, dst_port_count, time_added, S0, S1, S2, S3, REJ, service]
         if ip_ports:
             for i in ip_ports:
                 if i[0] == src_port:
-                    global src_port_count
-                    src_port_count += 1
+                    i[2] = i[2] + 1
+                    #global src_port_count
+                    #src_port_count += 1
 
                 if i[1] == dst_port:
-                    global dst_port_count
-                    dst_port_count += 1
+                    i[3] = i[3] + 1
+                    #global dst_port_count
+                    #dst_port_count += 1
 
                 if i[0] == src_ip and i[1] == dst_port:
                     ip_port_exist = True
             
             if not ip_port_exist:
-                ip_port = [src_port, dst_port, 0, 0]
+                ip_port = [src_port, dst_port, 1, 1, time_added, 0, 0, 0, 0, 0, service]
                 ip_ports.append(ip_port)
         else:
-            ip_port = [src_port, dst_port, 0, 0]
+            ip_port = [src_port, dst_port, 1, 1, time_added, 0, 0, 0, 0, 0, service]
             ip_ports.append(ip_port)
 
         s, sa, a, rst, pa, f = 0, 0, 0, 0, 0, 0
@@ -565,7 +569,7 @@ class Decode_Packet():
         else:
             return 0
 
-    def predict_packet(self, decoded_packet_dataset):
+    def predict_packet(self, decoded_packet_dataset, target_packet):
         url = 'http://127.0.0.1:5000/pred'
 
         columns = ['duration','protocol_type_icmp','protocol_type_tcp','protocol_type_udp','service_IRC','service_X11','service_Z39_50','service_aol','service_auth', \
@@ -580,7 +584,7 @@ class Decode_Packet():
             'logged_in','num_compromised','root_shell','su_attempted','num_root','num_file_creations','num_shells','num_access_files','num_outbound_cmds','is_host_login', \
             'is_guest_login','count','srv_count','serror_rate','srv_serror_rate','rerror_rate','srv_rerror_rate','same_srv_rate','diff_srv_rate','srv_diff_host_rate', \
             'dst_host_count','dst_host_srv_count','dst_host_same_srv_rate','dst_host_diff_srv_rate','dst_host_same_src_port_rate','dst_host_srv_diff_host_rate','dst_host_serror_rate', \
-            'dst_host_srv_serror_rate','dst_host_rerror_rate','dst_host_srv_rerror_rate','difficulty_level']
+            'dst_host_srv_serror_rate','dst_host_rerror_rate','dst_host_srv_rerror_rate', 'difficulty_level'] # 
 
         print("Columns: ", len(columns))
         print(len(decoded_packet_dataset))
@@ -591,7 +595,23 @@ class Decode_Packet():
         print("Data: ", data)
         data = data.to_dict()
 
+        ip_src = {"ip_src":str(target_packet[0])}
+        ip_dst = {"ip_dst":str(target_packet[1])}
+        port_src = {"port_src":str(target_packet[2])}
+        port_dst = {"port_dst":str(target_packet[3])}
+
         j_data = json.dumps(data)
+
+        z = json.loads(j_data)
+
+        z.update(ip_src)
+        z.update(ip_dst)
+        z.update(port_src)
+        z.update(port_dst)
+
+        j_data = json.dumps(z)
+
+        print("j data: $$$$$", j_data)
 
         headers = {'content-type': 'application/json', 'Accept-Charset': 'UTF-8'}
         r = requests.post(url, data=j_data, headers=headers)
@@ -623,7 +643,7 @@ class Decode_Packet():
                             protocol_list[1] = 1
                             decoded_packet.insert(2, 'TCP')
                             print("f", pcap[TCP].flags)
-                            self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport), str(pcap.len), pcap)
+                            self.add_packet_to_list(str(pcap[IP].src), str(pcap[IP].dst), str(pcap.sport), str(pcap.dport), str(pcap.len), pcap, self.service_name(pcap))
                         elif str(pcap[IP].proto) == '17':
                             protocol_list[2] = 1
                             decoded_packet.insert(2, 'UDP')
@@ -716,16 +736,17 @@ class Decode_Packet():
                         # num_shell_prompts, num_of_access_files, num_outbound_cmds]
                         
                         failed_logins = self.failed_logins(pcap)
-                        if ip_packets:
-                            for i in ip_packets:
-                                if (i[0] == pcap[IP].src and i[1] == pcap[IP].dst) or (i[0] == pcap[IP].dst and i[1] == pcap[IP].src):
-                                    i[4] += 1
-                                    if len(decoded_packet) == 12:
-                                        decoded_packet[11] = i[4]
-                                    else:
-                                        decoded_packet.insert(11, i[4])
+                        
+                        #if ip_packets:
+                        #    for i in ip_packets:
+                        #        if (i[0] == pcap[IP].src and i[1] == pcap[IP].dst) or (i[0] == pcap[IP].dst and i[1] == pcap[IP].src):
+                        #            i[4] += 1
+                        #            if len(decoded_packet) == 12:
+                        #                decoded_packet[11] = i[4]
+                        #            else:
+                        #                decoded_packet.insert(11, i[4])
 
-                                    numeric_features[7] = i[4]
+                        #            numeric_features[7] = i[4]
 
                                     # 16 Num Root
 
@@ -746,6 +767,7 @@ class Decode_Packet():
 
                         # 14 Root shell is obtained
 
+
                         # 15 Su attempted
                         is_su_root = self.is_su_root(pcap)
                         decoded_packet.insert(15, is_su_root)
@@ -762,9 +784,11 @@ class Decode_Packet():
                         numeric_features[18]= is_guest_login
 
                         # 23 Dst Count
+                        
+                        service_dict = {}
                         for i in ip_packets:
                             if i[1] == str(pcap[IP].dst):
-                                i[3] =+ 1
+                                i[3] = i[3] + 1
                                 if len(decoded_packet) == 24:
                                     decoded_packet[23] = i[3]
                                 else:
@@ -772,7 +796,103 @@ class Decode_Packet():
                                 
                                 numeric_features[19] = i[3]
 
+                                if str(pcap[IP].proto) == '6':
+
+                                    if flag == 'S0':
+                                        i[5] += 1
+                                    elif flag == 'S1':
+                                        i[6] += 1
+                                    elif flag == 'S2':
+                                        i[7] += 1
+                                    elif flag == 'S3':
+                                        i[8] += 1
+                                    elif flag == 'REJ':
+                                        i[9] += 1
+
+                                    if i[3] != 0:
+                                #26
+                                        serror_rate = (i[5] + i[6] + i[7] + i[8]) / i[3]
+
+                                        print("serror: ", serror_rate, i[5], i[6], i[7], i[8], i[3])
+                                        numeric_features[21]= "{:.1f}".format(serror_rate)
+                                #28
+                                        rerror_rate = i[9] / i[3]
+
+                                        numeric_features[23]= "{:.1f}".format(rerror_rate)
+
+                                        print("division *** ", "{:.1f}".format(serror_rate), "{:.1f}".format(rerror_rate))
+                                
+                                else:
+                                    numeric_features[21]= "{:.2f}".format(0.0)
+                                    numeric_features[23]= "{:.2f}".format(0.0)
+                                
+                                #30
+                                print("##### 30: ", i[10], service_dict)
+                                if i[10] in service_dict.keys():
+                                    
+                                    for key, value in service_dict.items():
+                                        if key == i[10]:
+                                            value = value + 1
+
+                                            #if i[3] != 0:
+
+                                            service_dict[i[10]] = value
+                                            print("Value ****: ", value, i[3])
+                                            value = value / i[3]
+
+                                            numeric_features[25]= "{:.1f}".format(value)
+                                            #31
+                                            numeric_features[26]= "{:.1f}".format(1 - value)
+
+                                            print("Service Dict: ", service_dict)
+
+                                else:
+                                    service_dict.update({i[10] : 1})
+                                    print(service_dict)
+
+
+                        service_port_dict = {}
+                        for i in ip_ports:
+                            if i[1] == str(pcap.dport):
+                                i[3] = i[3] + 1
+                                if len(decoded_packet) == 25:
+                                    decoded_packet[24] = i[3]
+                                else:
+                                    decoded_packet.insert(24, i[3])
+                                
+                                numeric_features[20] = i[3]
+
+                                if str(pcap[IP].proto) == '6':
+
+                                    if flag == 'S0':
+                                        i[5] += 1
+                                    elif flag == 'S1':
+                                        i[6] += 1
+                                    elif flag == 'S2':
+                                        i[7] += 1
+                                    elif flag == 'S3':
+                                        i[8] += 1
+                                    elif flag == 'REJ':
+                                        i[9] += 1
+
+                                    if i[3] != 0:
+                                #27
+                                        srverror_rate = (i[5] + i[6] + i[7] + i[8]) / i[3]
+
+                                        numeric_features[22]= "{:.1f}".format(srverror_rate)
+                                #29
+                                        srvrerror_rate = i[9] / i[3]
+
+                                        numeric_features[24]= "{:.1f}".format(srvrerror_rate)
+
+                                        print("division *** ", "{:.1f}".format(srverror_rate), "{:.2f}".format(srvrerror_rate))
+
+                                else:
+                                    numeric_features[22]= "{:.2f}".format(0.0)
+                                    numeric_features[24]= "{:.2f}".format(0.0) 
+                        #[src_ip, dst_ip, src_count, dst_count, time_added, S0, S1, S2, S3, REJ, service]
                         # 24 Dst Port Count
+                        '''
                         for i in ip_ports:
                             if i[1] == str(pcap[IP].dport):
                                 i[3] =+ 1
@@ -782,31 +902,136 @@ class Decode_Packet():
                                     decoded_packet.insert(24, i[3])
 
                                 numeric_features[20] = i[3]
-
+                        '''
                         # 25 Serror Rate
+                        
 
-                        # 32 Src Count (Number of connections having the same destination host IP address)
+                        # 33 Src Count (Number of connections having the same destination host IP address)
+                        '''
                         for i in ip_packets:
                             if i[0] == str(pcap[IP].src):
-                                i[2] =+ 1
+                                i[2] = i[2] + 1
                                 if len(decoded_packet) == 33:
                                     decoded_packet[32] = i[2]
                                 else:
                                     decoded_packet.insert(32, i[2])
 
                                 numeric_features[28] = i[2]
-
-                        # 33 Src Port Count (Number of connections having the same port number)
+                        
+                        # 34 Src Port Count (Number of connections having the same port number)
+                        
                         for i in ip_ports:
                             if i[0] == str(pcap[IP].sport):
-                                i[2] =+ 1
+                                i[2] = i[2] + 1
                                 if len(decoded_packet) == 34:
                                     decoded_packet[33] = i[2]
                                 else:
                                     decoded_packet.insert(33, i[2])
 
                                 numeric_features[29] = i[2]
+                        '''
+                        # 34 Percentage of connections that were to the same service among the connections aggregated in dst host count (#32)
+                        # ip_packet list (11)- [src_ip, dst_ip, src_count, dst_count, time_added, S0, S1, S2, S3, REJ, service]
+                        service_dst_dict = {}
+                        for i in ip_packets:
+                            #39 Number of connection with same dst address
+                            if i[0] == str(pcap[IP].src):
+                                i[2] = i[2] + 1
+                                if len(decoded_packet) == 24:
+                                    decoded_packet[23] = i[3]
+                                else:
+                                    decoded_packet.insert(23, i[3])
+                                
+                                numeric_features[28] = i[2]
 
+                                if str(pcap[IP].proto) == '6':
+
+                                    if flag == 'S0':
+                                        i[5] += 1
+                                    elif flag == 'S1':
+                                        i[6] += 1
+                                    elif flag == 'S2':
+                                        i[7] += 1
+                                    elif flag == 'S3':
+                                        i[8] += 1
+                                    elif flag == 'REJ':
+                                        i[9] += 1
+
+                                    if i[2] != 0:
+                                #39
+                                        serror_rate = (i[5] + i[6] + i[7] + i[8]) / i[2]
+
+                                        numeric_features[34]= "{:.2f}".format(serror_rate)
+                                #40
+                                        rerror_rate = i[9] / i[2]
+
+                                        numeric_features[36]= "{:.2f}".format(rerror_rate)
+
+                                        print("division *** ", "{:.2f}".format(serror_rate), "{:.2f}".format(rerror_rate))
+                                
+                                else:
+                                    numeric_features[34]= "{:.2f}".format(0.0)
+                                    numeric_features[36]= "{:.2f}".format(0.0)
+
+                                print("##### 30: ", i[10], service_dst_dict)
+                                if i[10] in service_dst_dict.keys():
+                                    
+                                    for key, value in service_dst_dict.items():
+                                        if key == i[10]:
+                                            value = value + 1
+
+                                            #if i[3] != 0:
+
+                                            service_dict[i[10]] = value
+                                            print("Value ****: ", value, i[2])
+                                            value = value / i[2]
+
+                                            numeric_features[30]= "{:.1f}".format(value)
+                                            #31
+                                            numeric_features[31]= "{:.1f}".format(1 - value)
+
+                                            print("Service Dict: ", service_dst_dict)
+                        # 40
+                        service_dict = {}
+                        for i in ip_ports:
+                            if i[1] == str(pcap.dport):
+                                i[3] =+ 1
+                                if len(decoded_packet) == 24:
+                                    decoded_packet[23] = i[3]
+                                else:
+                                    decoded_packet.insert(23, i[3])
+                                
+                                numeric_features[29] = i[3]
+
+                                if str(pcap[IP].proto) == '6':
+
+                                    if flag == 'S0':
+                                        i[5] += 1
+                                    elif flag == 'S1':
+                                        i[6] += 1
+                                    elif flag == 'S2':
+                                        i[7] += 1
+                                    elif flag == 'S3':
+                                        i[8] += 1
+                                    elif flag == 'REJ':
+                                        i[9] += 1
+
+                                    if i[2] != 0:
+                                #27
+                                        srverror_rate = (i[5] + i[6] + i[7] + i[8]) / i[2]
+
+                                        numeric_features[35]= "{:.2f}".format(serror_rate)
+                                #29
+                                        rerror_rate = i[9] / i[2]
+
+                                        numeric_features[37]= "{:.2f}".format(rerror_rate)
+
+                                        print("division *** ", "{:.2f}".format(serror_rate), "{:.2f}".format(rerror_rate))
+
+                                else:
+                                    numeric_features[35]= "{:.2f}".format(0.0)
+                                    numeric_features[37]= "{:.2f}".format(0.0)
+                    
                     else:
                         print("in else")
                         pass
@@ -820,15 +1045,22 @@ class Decode_Packet():
 
                     scaler.clip = False
 
+                    print("Numeric 1: ", numeric_features)
+
+                    pd.set_option("display.max_rows", None, "display.max_columns", None)
+
                     numeric_features = pd.DataFrame([numeric_features])
                     numeric_features = numeric_features.astype(float)
 
+
                     numeric_features = scaler.transform(numeric_features)
+
+
 
                     print("numeric features: ",numeric_features.shape)
 
                     numeric_features = numeric_features.tolist()
-                    print("Numeric 1: ", numeric_features)
+                    print("Numeric 2: ", numeric_features)
 
                     numeric_features[0][7] = 0.0
 
@@ -862,13 +1094,23 @@ class Decode_Packet():
 
                     decoded_packet_dataset[122] = 1.0
 
+                    #S1 flag 
+                    #decoded_packet_dataset[80] = 0.0
+
+                    #SF flag
+                    #decoded_packet_dataset[83] = 1.0
+
                     # land attack
                     decoded_packet_dataset[87] = 0.0
 
                     print(decoded_packet_dataset)
                     print(len(decoded_packet_dataset))
 
-                    predict_packet = self.predict_packet(decoded_packet_dataset)
+                    target_packet = [pcap[IP].src, pcap[IP].dst, pcap.sport, pcap.dport]
+
+                    decoded_packet_dataset = decoded_packet_dataset
+                    print(decoded_packet_dataset)
+                    predict_packet = self.predict_packet(decoded_packet_dataset, target_packet)
 
                     #print(numeric_features)
                     
